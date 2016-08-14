@@ -1,0 +1,46 @@
+{
+  "name": "battle-chat",
+  "version": "0.0.1",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "nodemon src/server.js --exec babel-node",
+    "build": "babel src -d dist",
+    "serve": "node dist/server.js",
+    "test": "mocha --compilers js:babel-register"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sanperrier/BattleChat.git"
+  },
+  "author": "Vyacheslav Dorzhiev",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sanperrier/BattleChat/issues"
+  },
+  "homepage": "https://github.com/sanperrier/BattleChat#readme",
+  "dependencies": {
+    "bunyan": "^1.8.1",
+    "mongoose": "^4.5.8",
+    "request": "^2.74.0",
+    "restify": "^4.1.1",
+    "restify-cookies": "^0.2.2",
+    "socket.io": "^1.4.8",
+    "socketio-auth": "aggregat/socketio-auth",
+    "strip-bom-buf": "^1.0.0"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.11.4",
+    "babel-polyfill": "^6.13.0",
+    "babel-preset-es2015": "^6.13.2",
+    "babel-preset-stage-2": "^6.13.0",
+    "mocha": "^3.0.2",
+    "nodemon": "^1.10.0"
+  },
+  "babel": {
+    "presets": [
+      "es2015",
+      "stage-2"
+    ]
+  }
+}

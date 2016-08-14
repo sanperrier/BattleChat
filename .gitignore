@@ -1,0 +1,7 @@
+*server.log
+/.ntvs_analysis.dat
+/.vs
+/bin
+/node_modules
+/obj
+/dist
