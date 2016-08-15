@@ -21,211 +21,141 @@ export default class Server {
             let uid = req.cookies.uid || req.query.uid; // TODO: remove it and get uid from auth
 
             if (!PHPSESSID) {
-                return next(new restify.NotAuthorizedError("Missing required query param PHPSESSID"));
+                return next(new restify.UnauthorizedError("Missing required query param PHPSESSID"));
             }
 
             if (!uid) {
-                return next(new restify.NotAuthorizedError("Missing required query param userId"));
+                return next(new restify.UnauthorizedError("Missing required query param uid"));
             }
 
             auth('PHPSESSID', PHPSESSID)
                 .then(() => {
-                    this.User
-                        .findOne({ uid: uid })
-                        .exec((err, user) => {
-                            if (err) return next(err);
-                            if (!user) return next(new restify.ResourceNotFoundError("No such user [uid=${uid}]"));
+                    if(!req.user) req.user = {};
+                    req.user.uid = uid;
 
-                            req.user = user;
-
-                            console.log('User [uid=${uid}] authorized with PHPSESSID=${PHPSESSID}');
-                            return next();
-                        });
+                    console.log(`User [uid=${uid}] authorized with PHPSESSID=${PHPSESSID}`);
+                    return next();
                 })
                 .catch(err => {
                     console.log(req, err);
-                    return next(new restify.NotAuthorizedError(err));
+                    return next(new restify.UnauthorizedError(err));
                 })
         }
 
-        function get_user(req, res, next) {
-            let PHPSESSID = req.cookies.PHPSESSID;
-            if (!PHPSESSID) {
-                return next(new restify.NotAuthorizedError("Missing required query param PHPSESSID"));
-            }
-
-            let conditions = {};
-            if (req.params._id) {
-                conditions = { _id: req.params._id };
-            } else if (req.query.uid) {
-                conditions = { uid: req.query.uid };
-            } else {
-                conditions = { session: PHPSESSID };
+        function populateUser(req, res, next) {
+            if (!req.user || !req.user.uid) {
+                return next(new restify.BadRequestError("Missing required query param uid"));
             }
 
             this.User
-                .findOne(conditions)
-                .populate('chats')
-                .exec((err, user) => {
+                .findOne({ uid: req.user.uid }).exec()
+                .then(user => {
+                    if (!user) return next(new restify.ResourceNotFoundError(`No such user [uid=${uid}]`));
+
+                    req.user = user;
+                    return next();
+                })
+                .catch(err => next(err));
+        }
+
+        function get_users(req, res, next) {
+            this.User
+                .find({})
+                .exec((err, users) => {
                     if (err)
                         return next(err);
 
-                    if (!user)
-                        return next(new restify.ResourceNotFoundError("No such user"));
-
-                    if (user.session != PHPSESSID) {
-                        var obj = user.toObject()
-                        delete obj.session;
-
-                        res.send(obj);
-                        return next();
-                    }
-
-                    Room.populate(user.chats,
-                        {
-                            path: 'users',
-                            select: '_id uid name avatar'
-                        },
-                        (err) => {
-                            if (err)
-                                return next(err);
-
-                            res.send(user);
-                            return next();
-                        });
+                    res.send(users);
+                    return next();
                 });
         }
 
-        function register_or_get_user(req, res, next) {
+        function get_user(req, res, next) {
+            if (req.params._id == req.user._id) {
+                req.user
+                    .populate('chats').execPopulate()
+                    .then(user => {
+                        this.Room
+                            .populate(user.chats, {
+                                path: 'users',
+                                select: '_id uid name avatar'
+                            })
+                            .then(() => {
+                                res.send(user);
+                                return next();
+                            })
+                            .catch(err => next(err));
+                    })
+                    .catch(err => next(err));
+            } else {
+                this.User
+                    .findOne({ _id: req.params._id })
+                    .exec()
+                    .then(user => {
+                        if (!user) return next(new restify.ResourceNotFoundError(`No such user [_id=${req.params._id}]`));
+
+                        res.send(user);
+                        return next();
+                    })
+                    .catch(err => next(err));
+            }
+        }
+
+        function post_user(req, res, next) {
+            console.log(req.body);
             if (!req.body.uid || !req.body.name) {
                 return next(new restify.MissingParameterError("Missing required param or attribute"));
             }
 
             this.User
-                .findOne({ uid: req.body.uid })
-                .exec((err, user) => {
-                    if (err)
-                        return next(err);
-
+                .findOne({ uid: req.body.uid }).exec()
+                .then(user => {
                     if (user) {
-                        user.session = req.body.session ? req.body.session : "";
                         user.name = req.body.name;
                         user.avatar = req.body.avatar;
 
-                        user.save((err) => {
-                            if (err)
-                                return next(err);
+                        user
+                            .save()
+                            .then(() => {
+                                res.send(user);
+                                return next();
+                            })
+                            .catch(err => next(err));
 
-                            res.send(user);
-                            return next();
-                        });
                     } else {
-                        user = new this.User({
+                        let user = new this.User({
                             uid: req.body.uid,
                             session: req.body.session ? req.body.session : "",
                             name: req.body.name,
                             avatar: req.body.avatar
                         });
 
-                        user.save((err) => {
-                            if (err)
-                                return next(err);
-
-                            res.send(user);
-                            return next();
-                        });
+                        user
+                            .save()
+                            .then(() => {
+                                res.send(user);
+                                return next();
+                            })
+                            .catch(err => next(err));
                     }
-                });
-        }
-
-        function post_user(req, res, next) {
-            if (!req.body.uid || !req.body.name) {
-                return next(new restify.MissingParameterError("Missing required param or attribute"));
-            }
-
-            if (req.body.session) {
-                this.User
-                    .findOne({ session: req.body.session })
-                    .exec((err, user) => {
-                        if (err)
-                            return next(err);
-
-                        if (user) {
-                            if (user.uid == req.body.uid) {
-                                user.name = req.body.name;
-                                user.avatar = req.body.avatar;
-
-                                user.save((err) => {
-                                    res.send(user);
-                                    return next();
-                                });
-                            } else {
-                                user.session = '';
-                                user.save((err) => {
-                                    register_or_get_user(req, res, next);
-                                });
-                            }
-                        } else {
-                            register_or_get_user(req, res, next);
-                        }
-                    });
-            } else {
-                register_or_get_user(req, res, next);
-            }
+                })
+                .catch(err => next(err));
         }
 
         function put_user(req, res, next) {
-            let PHPSESSID = req.cookies.PHPSESSID;
+            if (req.params._id != req.user._id) return next(new restify.InvalidCredentialsError("PUT to another user is forbidden"));
+            if (req.body._id && req.body._id != req.user._id) return next(new restify.BadRequestError("_id is not correct"));
+            if (req.body.uid && req.body._id != req.user.uid) return next(new restify.BadRequestError("uid is not correct"));
 
-            if (!req.body._id || !PHPSESSID) {
-                return next(new restify.MissingParameterError("Missing required param or attribute"));
-            }
-
-            this.User
-                .findOne({ session: PHPSESSID })
-                .exec((err, user) => {
-                    if (err)
-                        return next(err);
-
-                    if (user) {
-                        if (user._id == req.body._id && (!req.body.uid || req.body.uid == user.uid)) {
-                            user.name = req.body.name;
-                            user.avatar = req.body.avatar;
-
-                            user.save((err) => {
-                                if (err)
-                                    return next(err);
-
-                                res.send(user);
-                                return next();
-                            });
-                        } else {
-                            return next(new restify.InvalidCredentialsError("PUT to another user is forbidden"));
-                        }
-                    } else {
-                        this.User
-                            .findOne({ _id: req.body._id })
-                            .exec((err, user) => {
-                                if (err)
-                                    return next(err);
-
-                                if (!user)
-                                    return next(new restify.ResourceNotFoundError("No such user"));
-
-                                user.name = req.body.name;
-                                user.avatar = req.body.avatar;
-                                user.session = req.body.session ? req.body.session : PHPSESSID;
-
-                                user.save((err) => {
-                                    if (err)
-                                        return next(err);
-
-                                    res.send(user);
-                                    return next();
-                                });
-                            });
-                    }
-                });
+            req.user.name = req.body.name;
+            req.user.avatar = req.body.avatar;
+            req.user
+                .save()
+                .then(() => {
+                    res.send(user);
+                    return next();
+                })
+                .catch(err => next(err));
         }
 
         function get_rooms(req, res, next) {
@@ -479,10 +409,10 @@ export default class Server {
                 xff: true,
             }));
 
-        this.server.get('/user/', get_user);
-        this.server.get('/user/:_id', get_user);
-        this.server.post('/user/', post_user);
-        this.server.put('/user/', put_user);
+        this.server.get('/user/', authorize.bind(this), get_users.bind(this));
+        this.server.get('/user/:_id', authorize.bind(this), populateUser.bind(this), get_user.bind(this));
+        this.server.post('/user/', authorize.bind(this), post_user.bind(this));
+        this.server.put('/user/:_id', authorize.bind(this), populateUser.bind(this), put_user);
 
         this.server.get('/room/', authorize.bind(this), get_rooms.bind(this));
         this.server.get('/room/:_id', authorize.bind(this), get_room);
