@@ -12,7 +12,7 @@ Simple REST and socket-io chat server with MongoDB.
 `npm run build`
 
 ### Start production server:
-`npm run server`
+`npm run serve`
 
 ### Run tests:
 `npm tun test`
