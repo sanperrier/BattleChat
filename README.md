@@ -2,18 +2,18 @@
 
 Simple REST and socket-io chat server with MongoDB.
 
+### Install
+`npm install`
 
-npm install
+### Start new dev server:
+`npm run start`
 
-Start new dev server:
-npm run start
+### Build server to dist folder:
+`npm run build`
 
-Build server to dist folder:
-npm run build
+### Start production server:
+`npm run server`
 
-Start production server:
-npm run server
-
-Run tests:
-npm tun test
+### Run tests:
+`npm tun test`
 
