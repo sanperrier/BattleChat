@@ -1,39 +1,51 @@
-﻿import request from 'request';
+﻿import http from 'http';
 import stripBom from 'strip-bom-buf';
-import config from './../config';
+import config from './config';
 
-export default function authorize(sessionId, sessionName) {
+function request(options, data) {
     return new Promise((resolve, reject) => {
-        request
-            .get(config.auth, {
-                qs: {
-                    [sessionId]: sessionName
-                }
-            })
-            .on('response', response => {
-                response.on('data', data => {
-                    data = stripBom(data).toString('utf-8');
+        let req = http.request(options, res => resolve(res));
 
-                    if (/^\(.*\)$/.test(data)) {
-                        data = data.slice(1, -1);
-                    }
-                    try {
-                        data = JSON.parse(data);
-
-                        if ((data.answer_type == "ok") ||
-                            (data.answer_type == "err" && data.answer && data.answer.error_code == "10001")) {
-
-                            resolve(data);
-                        } else {
-                            reject(data.answer.error_text);
-                        }
-                    } catch (err) {
-                        reject(err);
-                    }
-                });
-            })
-            .on('error', err => {
-                reject(err);
-            })
+        req.on('error', err => reject(err))
+        if (data) req.write(data);
+        req.end();
     });
+}
+
+function fetchJSONData(res) {
+    return new Promise((resolve, reject) => {
+        let chunks = [];
+        res.on('data', chunk => chunks.push(chunk));
+        res.on('end', () => {
+            let data = stripBom(Buffer.concat(chunks)).toString('utf-8');
+            if (/^\(.*\)$/.test(data)) {
+                data = data.slice(1, -1);
+            }
+            resolve(JSON.parse(data));
+        });
+    });
+}
+
+export default function authorize(params) {
+    return request({
+        hostname: config.hostname(params),
+        port: 80,
+        path: config.path(params),
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+        .then(res => fetchJSONData(res))
+        .then(data => {
+            if (data.client_auth && data.user_id && (data.u_name || data.u_surname || data.u_login || data.u_guest_login)) {
+                return {
+                    uid: data.user_id,
+                    name: data.u_name ? (data.u_surname ? `${data.u_name} ${data.u_surname}` : data.u_name) : (data.u_login ? data.u_login : data.u_guest_login),
+                    avatar: data.u_ava || ''
+                };
+            } else {
+                throw new Error(JSON.stringify(data));
+            }
+        });
 }
