@@ -139,7 +139,7 @@ export default class Server {
 
                         room
                             .populate('messages')
-                            .populate('users', '_id uid name avatar', (err) => {
+                            .populate('users', 'uid name avatar', (err) => {
                                 if (err)
                                     return next(err);
 
@@ -158,14 +158,18 @@ export default class Server {
                 });
         }
 
-        this.server = restify.createServer();
+        this.server = restify.createServer({
+            name: 'Battle chat RESTify server',
+        });
 
         this.server.on('after', restify.auditLogger({
-            log: new bunyan({
-                name: 'mok',
-                streams: [{ level: "info", stream: process.stdout },
-                    { level: "info", path: 'server.log' }],
-            })
+            log: bunyan.createLogger({
+                name: 'Battle chat RESTify server',
+                streams: [
+                    { level: "debug", stream: process.stdout },
+                    { level: "trace", path: 'server.log' }]
+            }),
+            body: true,
         }));
 
         this.server.use(restify.acceptParser(this.server.acceptable))
@@ -182,16 +186,14 @@ export default class Server {
             }));
 
         this.server.get('/user/', this.authorize.bind(this), this.populateUser.bind(this), this.get_user.bind(this));
-        //this.server.put('/user/', this.authorize.bind(this), this.populateUser.bind(this), this.put_user.bind(this));
-        //this.server.patch('/user/', this.authorize.bind(this), this.populateUser.bind(this), this.put_user.bind(this));
 
-        this.server.get('/room/', this.authorize.bind(this), this.get_rooms.bind(this));
-        this.server.get('/room/:_id', this.authorize.bind(this), get_room);
         this.server.post('/room/', this.authorize.bind(this), this.post_room.bind(this));
+        //this.server.get('/room/', this.authorize.bind(this), this.get_rooms.bind(this));
+        //this.server.get('/room/:_id', this.authorize.bind(this), get_room);
 
-        this.server.post('/room/:room_id/user/', this.authorize.bind(this), post_room_user);
+        //this.server.post('/room/:room_id/user/', this.authorize.bind(this), post_room_user);
 
-        this.server.post('/room/:room_id/message/', this.authorize.bind(this), post_message);
+        //this.server.post('/room/:room_id/message/', this.authorize.bind(this), post_message);
 
         return this;
     };
@@ -256,18 +258,6 @@ export default class Server {
             .catch(err => next(err));
     };
 
-    //get_users(req, res, next) {
-    //    this.User
-    //        .find({})
-    //        .exec((err, users) => {
-    //            if (err)
-    //                return next(err);
-
-    //            res.send(users);
-    //            return next();
-    //        });
-    //};
-
     get_user(req, res, next) {
         req.user
             .populate('chats').execPopulate()
@@ -275,7 +265,7 @@ export default class Server {
                 this.Room
                     .populate(user.chats, {
                         path: 'users',
-                        select: '_id uid name avatar'
+                        select: 'uid name avatar'
                     })
                     .then(() => {
                         res.send(user);
@@ -286,51 +276,39 @@ export default class Server {
             .catch(err => next(err));
     };
 
-    post_user(req, res, next) {
-        if (!req.body.uid || !req.body.name) {
-            return next(new restify.MissingParameterError("Missing required param or attribute"));
-        }
+    post_room(req, res, next) {
+        if (!req.body.users || !req.body.users.length || req.body.users.length < 2) return next(new restify.MissingParameterError("Missing required body param users"));
+        if (!req.body.users.find(uid => uid == req.user.uid)) return next(new restify.BadRequestError("Can't create room without self"));
 
         this.User
-            .findOne({ uid: req.body.uid }).exec()
-            .then(user => {
-                if (user) {
-                    req.user = user;
-                    req.params._id = user._id.toString();
-                    this.put_user(req, res, next);
-                } else {
-                    let user = new this.User({
-                        uid: req.body.uid,
-                        session: req.body.session ? req.body.session : "",
-                        name: req.body.name,
-                        avatar: req.body.avatar
-                    });
+            .find({ uid: { $in: req.body.users } }).exec()
+            .then(users => {
+                if (!users || users.length < 2 || req.body.users.length != users.length) throw new restify.BadRequestError(`Incorrect users specified: ${JSON.stringify(req.body.users)}`);
 
-                    user
-                        .save()
-                        .then(() => {
-                            res.send(user);
-                            return next();
-                        })
-                        .catch(err => next(err));
-                }
+                return Promise.resolve()
+                    .then(() => {
+                        if (req.body.personal) {
+                            if (users.length != 2) throw new restify.BadRequestError("Personal room can be created only with 2 distinct users");
+                            return this.Room.findOne({ personal: true, users: { $all: users } }).exec();
+                        } else {
+                            return false;
+                        }
+                    })
+                    .then(room => {
+                        if (room) return room;
+                        else {
+                            let room = new this.Room();
+                            for (let user of users)
+                                room.users.push(user);
+                            room.personal = Boolean(req.body.personal);
+
+                            return room.save();
+                        }
+                    })
+                    .then(room => room.populate('users', 'uid name avatar').execPopulate())
+                    .then(room => res.send(room));
             })
-            .catch(err => next(err));
-    };
-
-    put_user(req, res, next) {
-        if (req.params._id != req.user._id) return next(new restify.InvalidCredentialsError("PUT to another user is forbidden"));
-        if (req.body._id && req.body._id != req.user._id) return next(new restify.BadRequestError("_id is not correct"));
-        if (req.body.uid && req.body.uid != req.user.uid) return next(new restify.BadRequestError("uid is not correct"));
-
-        req.user.name = req.body.name;
-        req.user.avatar = req.body.avatar;
-        req.user
-            .save()
-            .then(user => {
-                res.send(user);
-                return next();
-            })
+            .then(() => next())
             .catch(err => next(err));
     };
 
@@ -349,79 +327,6 @@ export default class Server {
             .then(rooms => {
                 res.send(rooms);
                 return next();
-            })
-            .catch(err => next(err));
-    };
-
-    post_room(req, res, next) {
-        this.User
-            .find({ _id: { $in: req.body.users } }).exec()
-            .then(users => {
-                if (!users) return next(new restify.BadRequestError("Empty users specified"));
-
-                if (req.body.personal) {
-                    if (users.length != 2) return next(new restify.BadRequestError("Personal room can be created only with 2 distinct users"));
-
-                    this.Room
-                        .findOne({ personal: true, users: { $all: users } }).exec()
-                        .then(room => {
-                            if (room) {
-                                room
-                                    .populate('messages')
-                                    .populate('users', '_id uid name avatar')
-                                    .execPopulate()
-                                    .then(room => {
-                                        res.send(room);
-                                        return next();
-                                    })
-                                    .catch(err => next(err));
-
-                            } else {
-                                let room = new room();
-
-                                for (let user of users)
-                                    room.users.push(user);
-
-                                room.personal = true;
-
-                                room
-                                    .save()
-                                    .then(room => {
-                                        room
-                                            .populate('users', '_id uid name avatar')
-                                            .execPopulate()
-                                            .then(room => {
-                                                res.send(room);
-                                                return next();
-                                            })
-                                            .catch(err => next(err));
-                                    })
-                                    .catch(err => next(err));
-                            }
-                        })
-                        .catch(err => next(err));
-                } else {
-                    let room = new Room();
-
-                    for (let user of users)
-                        room.users.push(user);
-
-                    room.personal = false;
-
-                    room
-                        .save()
-                        .then(room => {
-                            room
-                                .populate('users', '_id uid name avatar')
-                                .execPopulate()
-                                .then(room => {
-                                    res.send(room);
-                                    return next();
-                                })
-                                .catch(err => next(err));
-                        })
-                        .catch(err => next(err));
-                }
             })
             .catch(err => next(err));
     };
