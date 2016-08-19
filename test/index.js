@@ -174,6 +174,23 @@ describe('Battle chat', () => {
                     .then(() => done())
                     .catch(err => done(err));
             });
+
+            it('GET /user with sessionKey that is not [a-Z0-9]+ should return 401 or 403', done => {
+                request({
+                    hostname: config.hostname,
+                    port: config.port,
+                    path: `/user?sessionKey=${encodeURIComponent('eval(console.log(im a super kaker!))')}&sessionValue=${users[1].sessionValue}&authDeviceId=${users[1].authDeviceId}`,
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                    .then(res => {
+                        assert.ok(res.statusCode == 401 || res.statusCode == 403);
+                        done();
+                    })
+                    .catch(err => done(err));
+            });
         });
 
         describe('GET /user - retreiving current user', () => {
@@ -384,7 +401,7 @@ describe('Battle chat', () => {
                 for (let personal of [true, false]) {
                     it(`POST /room with only 1 user: [${index}] and personal=${personal} should return 409`, done => test(done,
                         index,
-                        { users: [users[index]], personal: personal },
+                        { users: [users[index].uid], personal: personal },
                         res => {
                             assert.equal(409, res.statusCode);
                         })
@@ -397,7 +414,7 @@ describe('Battle chat', () => {
                     for (let personal of [true, false]) {
                         it(`POST /room with the same user as users: [${index1}, ${index0}] and personal=${personal} should return 400`, done => test(done,
                             index0,
-                            { users: [users[index0], users[index1]], personal: personal },
+                            { users: [users[index0].uid, users[index1].uid], personal: personal },
                             res => {
                                 assert.equal(400, res.statusCode);
                             })
@@ -412,7 +429,7 @@ describe('Battle chat', () => {
                         for (let index3 of includeUserIndices) if (index3 == index2 || index3 == index1 || index3 == index0) {
                             it(`POST /room with users with duplicate: [${index0}, ${index1}, ${index2}, ${index3}] should return 400`, done => test(done,
                                 index0,
-                                { users: [users[index0], users[index1], users[index2], users[index3]] },
+                                { users: [users[index0].uid, users[index1].uid, users[index2].uid, users[index3].uid] },
                                 res => {
                                     assert.equal(400, res.statusCode);
                                 })
@@ -428,7 +445,7 @@ describe('Battle chat', () => {
                         for (let index3 of includeUserIndices) if (index3 != index2 && index3 != index1 && index3 != index0) {
                             it(`POST /room with users: [${index1}, ${index2}, ${index3}] from user ${index0} should return 400`, done => test(done,
                                 index0,
-                                { users: [users[index0], users[index1], users[index2], users[index3]] },
+                                { users: [users[index1].uid, users[index2].uid, users[index3].uid] },
                                 res => {
                                     assert.equal(400, res.statusCode);
                                 })
@@ -443,7 +460,7 @@ describe('Battle chat', () => {
                     for (let index2 of includeUserIndices) if (index2 != index1 && index2 != index0) {
                         it(`POST /room with users: [${index0}, ${index1}, ${index2}] and personal=true should return 400`, done => test(done,
                             index0,
-                            { users: [users[index0], users[index1], users[index2]], personal: true },
+                            { users: [users[index0].uid, users[index1].uid, users[index2].uid], personal: true },
                             res => {
                                 assert.equal(400, res.statusCode);
                             })
@@ -452,7 +469,7 @@ describe('Battle chat', () => {
                         for (let index3 of includeUserIndices) if (index3 != index2 && index3 != index1 && index3 != index0) {
                             it(`POST /room with users: [${index0}, ${index1}, ${index2}, ${index3}] and personal=true should return 400`, done => test(done,
                                 index0,
-                                { users: [users[index0], users[index1], users[index2], users[index3]], personal: true },
+                                { users: [users[index0].uid, users[index1].uid, users[index2].uid, users[index3].uid], personal: true },
                                 res => {
                                     assert.equal(400, res.statusCode);
                                 })

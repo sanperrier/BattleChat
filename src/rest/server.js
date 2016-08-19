@@ -199,9 +199,9 @@ export default class Server {
     };
 
     authorize(req, res, next) {
-        let sessionKey = req.cookies.sessionKey || req.query.sessionKey;
-        let sessionValue = req.cookies.sessionValue || req.query.sessionValue;
-        let authDeviceId = req.cookies.authDeviceId || req.query.authDeviceId;
+        let sessionKey = String(req.cookies.sessionKey || req.query.sessionKey);
+        let sessionValue = String(req.cookies.sessionValue || req.query.sessionValue);
+        let authDeviceId = String(req.cookies.authDeviceId || req.query.authDeviceId);
 
         if (!sessionKey) {
             return next(new restify.UnauthorizedError("Missing required query param sessionKey"));
@@ -213,6 +213,11 @@ export default class Server {
 
         if (!authDeviceId) {
             return next(new restify.UnauthorizedError("Missing required query param authDeviceId"));
+        }
+
+        let re = /^[a-zA-Z0-9]+$/;
+        if (!re.test(sessionKey) || !re.test(sessionValue) || !re.test(authDeviceId)) {
+            return next(new restify.UnauthorizedError());
         }
 
         auth({ sessionKey, sessionValue, authDeviceId })
@@ -277,17 +282,21 @@ export default class Server {
     };
 
     post_room(req, res, next) {
-        if (!req.body.users || !req.body.users.length || req.body.users.length < 2) return next(new restify.MissingParameterError("Missing required body param users"));
-        if (!req.body.users.find(uid => uid == req.user.uid)) return next(new restify.BadRequestError("Can't create room without self"));
+        let re = /^[a-zA-Z0-9]+$/;
+        let bodyUsers = req.body.users.map(u => String(u)).filter(u => re.test(u));
+        let personal = Boolean(req.body.personal);
+
+        if (!bodyUsers || !bodyUsers.length || bodyUsers.length < 2) return next(new restify.MissingParameterError("Missing required body param users"));
+        if (!bodyUsers.find(uid => uid == req.user.uid)) return next(new restify.BadRequestError("Can't create room without self"));
 
         this.User
-            .find({ uid: { $in: req.body.users } }).exec()
+            .find({ uid: { $in: bodyUsers } }).exec()
             .then(users => {
-                if (!users || users.length < 2 || req.body.users.length != users.length) throw new restify.BadRequestError(`Incorrect users specified: ${JSON.stringify(req.body.users)}`);
+                if (!users || users.length < 2 || bodyUsers.length != users.length) throw new restify.BadRequestError(`Incorrect users specified: ${JSON.stringify(bodyUsers)}`);
 
                 return Promise.resolve()
                     .then(() => {
-                        if (req.body.personal) {
+                        if (personal) {
                             if (users.length != 2) throw new restify.BadRequestError("Personal room can be created only with 2 distinct users");
                             return this.Room.findOne({ personal: true, users: { $all: users } }).exec();
                         } else {
@@ -300,7 +309,7 @@ export default class Server {
                             let room = new this.Room();
                             for (let user of users)
                                 room.users.push(user);
-                            room.personal = Boolean(req.body.personal);
+                            room.personal = personal;
 
                             return room.save();
                         }
