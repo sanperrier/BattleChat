@@ -188,7 +188,7 @@ export default class Server {
         this.server.get('/user/', this.authorize.bind(this), this.populateUser.bind(this), this.get_user.bind(this));
 
         this.server.post('/room/', this.authorize.bind(this), this.post_room.bind(this));
-        //this.server.get('/room/', this.authorize.bind(this), this.get_rooms.bind(this));
+        this.server.get('/room/', this.authorize.bind(this), this.populateUser.bind(this), this.get_rooms.bind(this));
         //this.server.get('/room/:_id', this.authorize.bind(this), get_room);
 
         //this.server.post('/room/:room_id/user/', this.authorize.bind(this), post_room_user);
@@ -323,7 +323,7 @@ export default class Server {
 
         this.Room
             .find(condition)
-            .populate('users', '_id uid name avatar')
+            .populate('users', 'uid name avatar')
             .then(rooms => {
                 res.send(rooms);
                 return next();

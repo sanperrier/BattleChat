@@ -31,6 +31,8 @@ function fetchJSONData(res) {
 let users = {};
 let includeUserIndices = [1, 2, 3, 4];
 
+let rooms = {};
+
 before('Test setup', () => {
     it('Clear test db', done => {
         mongoose.connect(config.db, () => {
@@ -174,7 +176,7 @@ describe('Battle chat', () => {
             });
         });
 
-        describe('GET /user', () => {
+        describe('GET /user - retreiving current user', () => {
             for (let index of includeUserIndices) {
                 it(`GET user should return test user ${index}`, done => {
                     let user = users[index];
@@ -205,182 +207,111 @@ describe('Battle chat', () => {
             }
         });
 
-        describe('POST /room', () => {
-            let rooms = {};
+        describe('POST /room - create new room and retrive it', () => {
+            let test = (done, userIndex, data, resCb, dataCb) => {
+                request({
+                    hostname: config.hostname,
+                    port: config.port,
+                    path: `/room?sessionKey=${users[userIndex].sessionKey}&sessionValue=${users[userIndex].sessionValue}&authDeviceId=${users[userIndex].authDeviceId}`,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                }, data)
+                    .then(res => {
+                        resCb(res);
+                        if (dataCb) {
+                            return fetchJSONData(res);
+                        }
+                    })
+                    .then(room => {
+                        if (dataCb) {
+                            dataCb(room)
+                        }
+                    })
+                    .then(() => done())
+                    .catch(err => done(err));
+            };
+
+            let findUserAndCheckEquality = (user, room) => {
+                let user0 = room.users.find(u => u.uid == user.uid);
+                assert.ok(user0);
+                assert.equal(user0.uid, user.uid);
+                assert.equal(user0.name, user.name);
+                assert.equal(user0.avatar, user.avatar);
+            };
+
+            let baseCheckRoom = room => {
+                assert.ok(room);
+                assert.ok(room._id);
+                assert.ok(room.messages);
+                assert.ok(room.users);
+            };
 
             for (let index0 of includeUserIndices) {
-                for (let index1 of includeUserIndices) {
-                    if (index0 != index1) {
-                        for (let index2 of includeUserIndices) {
-                            if (index2 != index1 && index2 != index0) {
-                                for (let index3 of includeUserIndices) {
-                                    if (index3 != index2 && index3 != index1 && index3 != index0) {
-                                        it(`POST /room with users: [${index0}, ${index1}, ${index2}, ${index3}] should create new room with them`, done => {
-                                            let user0 = users[index0];
-                                            let user1 = users[index1];
-                                            let user2 = users[index2];
-                                            let user3 = users[index3];
-                                            request({
-                                                hostname: config.hostname,
-                                                port: config.port,
-                                                path: `/room?sessionKey=${user0.sessionKey}&sessionValue=${user0.sessionValue}&authDeviceId=${user0.authDeviceId}`,
-                                                method: 'POST',
-                                                headers: {
-                                                    'Content-Type': 'application/json',
-                                                }
-                                            }, { users: [user0.uid, user1.uid, user2.uid, user3.uid] })
-                                                .then(res => {
-                                                    assert.equal(200, res.statusCode);
-                                                    return fetchJSONData(res);
-                                                })
-                                                .then(room => {
-                                                    assert.ok(room);
-                                                    assert.ok(room._id);
-                                                    assert.ok(room.messages);
-                                                    assert.ok(room.users);
-                                                    assert.equal(room.personal, false);
-                                                    assert.equal(room.users.length, 4);
-                                                    {
-                                                        let user = room.users.find(u => u.uid == user0.uid);
-                                                        assert.ok(user);
-                                                        assert.equal(user.uid, user0.uid);
-                                                        assert.equal(user.name, user0.name);
-                                                        assert.equal(user.avatar, user0.avatar);
-                                                    }
-                                                    {
-                                                        let user = room.users.find(u => u.uid == user1.uid);
-                                                        assert.ok(user);
-                                                        assert.equal(user.uid, user1.uid);
-                                                        assert.equal(user.name, user1.name);
-                                                        assert.equal(user.avatar, user1.avatar);
-                                                    }
-                                                    {
-                                                        let user = room.users.find(u => u.uid == user2.uid);
-                                                        assert.ok(user);
-                                                        assert.equal(user.uid, user2.uid);
-                                                        assert.equal(user.name, user2.name);
-                                                        assert.equal(user.avatar, user2.avatar);
-                                                    }
-                                                    {
-                                                        let user = room.users.find(u => u.uid == user3.uid);
-                                                        assert.ok(user);
-                                                        assert.equal(user.uid, user3.uid);
-                                                        assert.equal(user.name, user3.name);
-                                                        assert.equal(user.avatar, user3.avatar);
-                                                    }
+                for (let index1 of includeUserIndices) if (index0 != index1) {
+                    it(`POST /room with users: [${index0}, ${index1}] should create new room with them`, done => test(done,
+                        index0,
+                        { users: [users[index0].uid, users[index1].uid] },
+                        res => {
+                            assert.equal(200, res.statusCode);
+                        },
+                        room => {
+                            baseCheckRoom(room);
+                            assert.equal(room.personal, false);
+                            assert.equal(room.users.length, 2);
+                            findUserAndCheckEquality(users[index0], room);
+                            findUserAndCheckEquality(users[index1], room)
 
-                                                    assert.ok(!rooms[room._id]);
+                            assert.ok(!rooms[room._id]);
 
-                                                    rooms[room._id] = room;
-                                                })
-                                                .then(() => done())
-                                                .catch(err => done(err));
-                                        });
-                                    }
-                                }
+                            rooms[room._id] = room;
+                        })
+                    );
 
-                                it(`POST /room with users: [${index0}, ${index1}, ${index2}] should create new room with them`, done => {
-                                    let user0 = users[index0];
-                                    let user1 = users[index1];
-                                    let user2 = users[index2];
-                                    request({
-                                        hostname: config.hostname,
-                                        port: config.port,
-                                        path: `/room?sessionKey=${user0.sessionKey}&sessionValue=${user0.sessionValue}&authDeviceId=${user0.authDeviceId}`,
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/json',
-                                        }
-                                    }, { users: [user0.uid, user1.uid, user2.uid] })
-                                        .then(res => {
-                                            assert.equal(200, res.statusCode);
-                                            return fetchJSONData(res);
-                                        })
-                                        .then(room => {
-                                            assert.ok(room);
-                                            assert.ok(room._id);
-                                            assert.ok(room.messages);
-                                            assert.ok(room.users);
-                                            assert.equal(room.personal, false);
-                                            assert.equal(room.users.length, 3);
-                                            {
-                                                let user = room.users.find(u => u.uid == user0.uid);
-                                                assert.ok(user);
-                                                assert.equal(user.uid, user0.uid);
-                                                assert.equal(user.name, user0.name);
-                                                assert.equal(user.avatar, user0.avatar);
-                                            }
-                                            {
-                                                let user = room.users.find(u => u.uid == user1.uid);
-                                                assert.ok(user);
-                                                assert.equal(user.uid, user1.uid);
-                                                assert.equal(user.name, user1.name);
-                                                assert.equal(user.avatar, user1.avatar);
-                                            }
-                                            {
-                                                let user = room.users.find(u => u.uid == user2.uid);
-                                                assert.ok(user);
-                                                assert.equal(user.uid, user2.uid);
-                                                assert.equal(user.name, user2.name);
-                                                assert.equal(user.avatar, user2.avatar);
-                                            }
+                    for (let index2 of includeUserIndices) if (index2 != index1 && index2 != index0) {
+                        it(`POST /room with users: [${index0}, ${index1}, ${index2}] should create new room with them`, done => test(done,
+                            index0,
+                            { users: [users[index0].uid, users[index1].uid, users[index2].uid] },
+                            res => {
+                                assert.equal(200, res.statusCode);
+                            },
+                            room => {
+                                baseCheckRoom(room);
+                                assert.equal(room.personal, false);
+                                assert.equal(room.users.length, 3);
+                                findUserAndCheckEquality(users[index0], room)
+                                findUserAndCheckEquality(users[index1], room)
+                                findUserAndCheckEquality(users[index2], room)
 
-                                            assert.ok(!rooms[room._id]);
+                                assert.ok(!rooms[room._id]);
 
-                                            rooms[room._id] = room;
-                                        })
-                                        .then(() => done())
-                                        .catch(err => done(err));
-                                });
+                                rooms[room._id] = room;
+                            })
+                        );
 
-                            }
-                        }
-
-                        it(`POST /room with users: [${index0}, ${index1}] should create new room with them`, done => {
-                            let user0 = users[index0];
-                            let user1 = users[index1];
-                            request({
-                                hostname: config.hostname,
-                                port: config.port,
-                                path: `/room?sessionKey=${user0.sessionKey}&sessionValue=${user0.sessionValue}&authDeviceId=${user0.authDeviceId}`,
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                }
-                            }, { users: [user0.uid, user1.uid] })
-                                .then(res => {
+                        for (let index3 of includeUserIndices) if (index3 != index2 && index3 != index1 && index3 != index0) {
+                            it(`POST /room with users: [${index0}, ${index1}, ${index2}, ${index3}] should create new room with them`, done => test(done,
+                                index0,
+                                { users: [users[index0].uid, users[index1].uid, users[index2].uid, users[index3].uid] },
+                                res => {
                                     assert.equal(200, res.statusCode);
-                                    return fetchJSONData(res);
-                                })
-                                .then(room => {
-                                    assert.ok(room);
-                                    assert.ok(room._id);
-                                    assert.ok(room.messages);
-                                    assert.ok(room.users);
+                                },
+                                room => {
+                                    baseCheckRoom(room);
                                     assert.equal(room.personal, false);
-                                    assert.equal(room.users.length, 2);
-                                    {
-                                        let user = room.users.find(u => u.uid == user0.uid);
-                                        assert.ok(user);
-                                        assert.equal(user.uid, user0.uid);
-                                        assert.equal(user.name, user0.name);
-                                        assert.equal(user.avatar, user0.avatar);
-                                    }
-                                    {
-                                        let user = room.users.find(u => u.uid == user1.uid);
-                                        assert.ok(user);
-                                        assert.equal(user.uid, user1.uid);
-                                        assert.equal(user.name, user1.name);
-                                        assert.equal(user.avatar, user1.avatar);
-                                    }
+                                    assert.equal(room.users.length, 4);
+                                    findUserAndCheckEquality(users[index0], room)
+                                    findUserAndCheckEquality(users[index1], room)
+                                    findUserAndCheckEquality(users[index2], room)
+                                    findUserAndCheckEquality(users[index3], room)
 
                                     assert.ok(!rooms[room._id]);
 
                                     rooms[room._id] = room;
                                 })
-                                .then(() => done())
-                                .catch(err => done(err));
-                        });
+                            );
+                        }
                     }
                 }
             }
@@ -388,51 +319,24 @@ describe('Battle chat', () => {
             for (let index0 of includeUserIndices) {
                 for (let index1 of includeUserIndices) {
                     if (index0 < index1) {
-                        it(`POST /room with users: [${index0}, ${index1}] and personal=true should create new personal room with them`, done => {
-                            let user0 = users[index0];
-                            let user1 = users[index1];
-                            request({
-                                hostname: config.hostname,
-                                port: config.port,
-                                path: `/room?sessionKey=${user0.sessionKey}&sessionValue=${user0.sessionValue}&authDeviceId=${user0.authDeviceId}`,
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                }
-                            },{ users: [user0.uid, user1.uid], personal: true })
-                                .then(res => {
-                                    assert.equal(200, res.statusCode);
-                                    return fetchJSONData(res);
-                                })
-                                .then(room => {
-                                    assert.ok(room);
-                                    assert.ok(room._id);
-                                    assert.ok(room.messages);
-                                    assert.ok(room.users);
-                                    assert.equal(room.personal, true);
-                                    assert.equal(room.users.length, 2);
-                                    {
-                                        let user = room.users.find(u => u.uid == user0.uid);
-                                        assert.ok(user);
-                                        assert.equal(user.uid, user0.uid);
-                                        assert.equal(user.name, user0.name);
-                                        assert.equal(user.avatar, user0.avatar);
-                                    }
-                                    {
-                                        let user = room.users.find(u => u.uid == user1.uid);
-                                        assert.ok(user);
-                                        assert.equal(user.uid, user1.uid);
-                                        assert.equal(user.name, user1.name);
-                                        assert.equal(user.avatar, user1.avatar);
-                                    }
+                        it(`POST /room with users: [${index0}, ${index1}] and personal=true should create new personal room with them`, done => test(done,
+                            index0,
+                            { users: [users[index0].uid, users[index1].uid], personal: true },
+                            res => {
+                                assert.equal(200, res.statusCode);
+                            },
+                            room => {
+                                baseCheckRoom(room);
+                                assert.equal(room.personal, true);
+                                assert.equal(room.users.length, 2);
+                                findUserAndCheckEquality(users[index0], room)
+                                findUserAndCheckEquality(users[index1], room)
 
-                                    assert.ok(!rooms[room._id]);
+                                assert.ok(!rooms[room._id]);
 
-                                    rooms[room._id] = room;
-                                })
-                                .then(() => done())
-                                .catch(err => done(err));
-                        });
+                                rooms[room._id] = room;
+                            })
+                        );
                     }
                 }
             }
@@ -440,423 +344,227 @@ describe('Battle chat', () => {
             for (let index0 of includeUserIndices) {
                 for (let index1 of includeUserIndices) {
                     if (index0 != index1) {
-                        it(`POST /room again with the same users: [${index0}, ${index1}] and personal=true should return previously created room with them`, done => {
-                            let user0 = users[index0];
-                            let user1 = users[index1];
-                            request({
-                                hostname: config.hostname,
-                                port: config.port,
-                                path: `/room?sessionKey=${user0.sessionKey}&sessionValue=${user0.sessionValue}&authDeviceId=${user0.authDeviceId}`,
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                }
-                            }, { users: [user0.uid, user1.uid], personal: true })
-                                .then(res => {
-                                    assert.equal(200, res.statusCode);
-                                    return fetchJSONData(res);
-                                })
-                                .then(newRoom => {
-                                    let oldRoom = rooms[newRoom._id];
+                        it(`POST /room again with the same users: [${index0}, ${index1}] and personal=true should return previously created room with them`, done => test(done,
+                            index0,
+                            { users: [users[index0].uid, users[index1].uid], personal: true },
+                            res => {
+                                assert.equal(200, res.statusCode);
+                            },
+                            room => {
+                                baseCheckRoom(room);
+                                assert.equal(room.personal, true);
+                                assert.equal(room.users.length, 2);
+                                findUserAndCheckEquality(users[index0], room)
+                                findUserAndCheckEquality(users[index1], room)
 
-                                    assert.ok(oldRoom);
-                                    assert.ok(oldRoom.messages);
-                                    assert.equal(oldRoom._id, newRoom._id);
-                                    assert.equal(oldRoom.personal, newRoom.personal);
-                                    assert.equal(oldRoom.users.length, newRoom.users.length);
-                                    {
-                                        let user = newRoom.users.find(u => u.uid == user0.uid);
-                                        assert.ok(user);
-                                        assert.equal(user.uid, user0.uid);
-                                        assert.equal(user.name, user0.name);
-                                        assert.equal(user.avatar, user0.avatar);
-                                    }
-                                    {
-                                        let user = newRoom.users.find(u => u.uid == user1.uid);
-                                        assert.ok(user);
-                                        assert.equal(user.uid, user1.uid);
-                                        assert.equal(user.name, user1.name);
-                                        assert.equal(user.avatar, user1.avatar);
-                                    }
-
-                                    for (let oldUser of oldRoom.users) {
-                                        let user = oldRoom.users.find(u => u.uid == oldUser.uid);
-                                        assert.ok(user);
-                                        assert.equal(user.uid, oldUser.uid);
-                                        assert.equal(user.name, oldUser.name);
-                                        assert.equal(user.avatar, oldUser.avatar);
-                                    }
-                                })
-                                .then(() => done())
-                                .catch(err => done(err));
-                        });
+                                let oldRoom = rooms[room._id];
+                                assert.ok(oldRoom);
+                                assert.equal(oldRoom._id, room._id);
+                                assert.equal(oldRoom.personal, room.personal);
+                                assert.equal(oldRoom.users.length, room.users.length);
+                                findUserAndCheckEquality(users[index0], oldRoom)
+                                findUserAndCheckEquality(users[index1], oldRoom)
+                            })
+                        );
                     }
                 }
             }
 
             for (let personal of [true, false]) {
-                it(`POST /room with no users should return 409`, done => {
-                    let user = users[includeUserIndices[0]];
-                    request({
-                        hostname: config.hostname,
-                        port: config.port,
-                        path: `/room?sessionKey=${user.sessionKey}&sessionValue=${user.sessionValue}&authDeviceId=${user.authDeviceId}`,
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        }
-                    }, { users: [], personal: personal })
-                        .then(res => {
+                it(`POST /room with no users should return 409`, done => test(done,
+                    includeUserIndices[0],
+                    { users: [], personal: personal },
+                    res => {
+                        assert.equal(409, res.statusCode);
+                    })
+                );
+            }
+
+            for (let index of includeUserIndices) {
+                for (let personal of [true, false]) {
+                    it(`POST /room with only 1 user: [${index}] and personal=${personal} should return 409`, done => test(done,
+                        index,
+                        { users: [users[index]], personal: personal },
+                        res => {
                             assert.equal(409, res.statusCode);
                         })
-                        .then(() => done())
-                        .catch(err => done(err));
-                });
+                    );
+                }
             }
 
             for (let index0 of includeUserIndices) {
+                for (let index1 of includeUserIndices) if (index0 == index1) {
                     for (let personal of [true, false]) {
-                        it(`POST /room with only 1 user: [${index0}] and personal=${personal} should return 409`, done => {
-                            let user0 = users[index0];
-                            request({
-                                hostname: config.hostname,
-                                port: config.port,
-                                path: `/room?sessionKey=${user0.sessionKey}&sessionValue=${user0.sessionValue}&authDeviceId=${user0.authDeviceId}`,
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                }
-                            }, { users: [user0.uid], personal: personal })
-                                .then(res => {
-                                    assert.equal(409, res.statusCode);
+                        it(`POST /room with the same user as users: [${index1}, ${index0}] and personal=${personal} should return 400`, done => test(done,
+                            index0,
+                            { users: [users[index0], users[index1]], personal: personal },
+                            res => {
+                                assert.equal(400, res.statusCode);
+                            })
+                        );
+                    }
+                }
+            }
+
+            for (let index0 of includeUserIndices) {
+                for (let index1 of includeUserIndices) if (index0 != index1) {
+                    for (let index2 of includeUserIndices) if (index2 != index1 && index2 != index0) {
+                        for (let index3 of includeUserIndices) if (index3 == index2 || index3 == index1 || index3 == index0) {
+                            it(`POST /room with users with duplicate: [${index0}, ${index1}, ${index2}, ${index3}] should return 400`, done => test(done,
+                                index0,
+                                { users: [users[index0], users[index1], users[index2], users[index3]] },
+                                res => {
+                                    assert.equal(400, res.statusCode);
                                 })
-                                .then(() => done())
-                                .catch(err => done(err));
-                        });
-                    }
-            }
-
-            for (let index0 of includeUserIndices) {
-                for (let index1 of includeUserIndices) {
-                    if (index0 == index1) {
-                        for (let personal of [true, false]) {
-                            it(`POST /room with the same user as users: [${index1}, ${index0}] and personal=${personal} should return 400`, done => {
-                                let user0 = users[index0];
-                                let user1 = users[index1];
-                                request({
-                                    hostname: config.hostname,
-                                    port: config.port,
-                                    path: `/room?sessionKey=${user0.sessionKey}&sessionValue=${user0.sessionValue}&authDeviceId=${user0.authDeviceId}`,
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                    }
-                                }, { users: [user0.uid, user1.uid], personal: personal })
-                                    .then(res => {
-                                        assert.equal(400, res.statusCode);
-                                    })
-                                    .then(() => done())
-                                    .catch(err => done(err));
-                            });
+                            );
                         }
                     }
                 }
             }
 
             for (let index0 of includeUserIndices) {
-                for (let index1 of includeUserIndices) {
-                    if (index0 != index1) {
-                        for (let index2 of includeUserIndices) {
-                            if (index2 != index1 && index2 != index0) {
-                                for (let index3 of includeUserIndices) {
-                                    if (index3 == index2 || index3 == index1 || index3 == index0) {
-                                        it(`POST /room with users: [${index0}, ${index1}, ${index2}, ${index3}] should return 400`, done => {
-                                            let user0 = users[index0];
-                                            let user1 = users[index1];
-                                            let user2 = users[index2];
-                                            let user3 = users[index3];
-                                            request({
-                                                hostname: config.hostname,
-                                                port: config.port,
-                                                path: `/room?sessionKey=${user0.sessionKey}&sessionValue=${user0.sessionValue}&authDeviceId=${user0.authDeviceId}`,
-                                                method: 'POST',
-                                                headers: {
-                                                    'Content-Type': 'application/json',
-                                                }
-                                            }, { users: [user0.uid, user1.uid, user2.uid, user3.uid] })
-                                                .then(res => {
-                                                    assert.equal(400, res.statusCode);
-                                                })
-                                                .then(() => done())
-                                                .catch(err => done(err));
-                                        });
-                                    }
-                                }
-                            }
+                for (let index1 of includeUserIndices) if (index0 != index1) {
+                    for (let index2 of includeUserIndices) if (index2 != index1 && index2 != index0) {
+                        for (let index3 of includeUserIndices) if (index3 != index2 && index3 != index1 && index3 != index0) {
+                            it(`POST /room with users: [${index1}, ${index2}, ${index3}] from user ${index0} should return 400`, done => test(done,
+                                index0,
+                                { users: [users[index0], users[index1], users[index2], users[index3]] },
+                                res => {
+                                    assert.equal(400, res.statusCode);
+                                })
+                            );
                         }
                     }
                 }
             }
 
             for (let index0 of includeUserIndices) {
-                for (let index1 of includeUserIndices) {
-                    if (index0 != index1) {
-                        for (let index2 of includeUserIndices) {
-                            if (index2 != index1 && index2 != index0) {
-                                for (let index3 of includeUserIndices) {
-                                    if (index3 != index2 && index3 != index1 && index3 != index0) {
-                                        it(`POST /room with users: [${index1}, ${index2}, ${index3}] from user ${index0} should return 400`, done => {
-                                            let user0 = users[index0];
-                                            let user1 = users[index1];
-                                            let user2 = users[index2];
-                                            let user3 = users[index3];
-                                            request({
-                                                hostname: config.hostname,
-                                                port: config.port,
-                                                path: `/room?sessionKey=${user0.sessionKey}&sessionValue=${user0.sessionValue}&authDeviceId=${user0.authDeviceId}`,
-                                                method: 'POST',
-                                                headers: {
-                                                    'Content-Type': 'application/json',
-                                                }
-                                            }, { users: [user1.uid, user2.uid, user3.uid], personal: true })
-                                                .then(res => {
-                                                    assert.equal(400, res.statusCode);
-                                                })
-                                                .then(() => done())
-                                                .catch(err => done(err));
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+                for (let index1 of includeUserIndices) if (index0 != index1) {
+                    for (let index2 of includeUserIndices) if (index2 != index1 && index2 != index0) {
+                        it(`POST /room with users: [${index0}, ${index1}, ${index2}] and personal=true should return 400`, done => test(done,
+                            index0,
+                            { users: [users[index0], users[index1], users[index2]], personal: true },
+                            res => {
+                                assert.equal(400, res.statusCode);
+                            })
+                        );
 
-            for (let index0 of includeUserIndices) {
-                for (let index1 of includeUserIndices) {
-                    if (index0 != index1) {
-                        for (let index2 of includeUserIndices) {
-                            if (index2 != index1 && index2 != index0) {
-                                for (let index3 of includeUserIndices) {
-                                    if (index3 != index2 && index3 != index1 && index3 != index0) {
-                                        it(`POST /room with users: [${index0}, ${index1}, ${index2}, ${index3}] and personal=true should return 400`, done => {
-                                            let user0 = users[index0];
-                                            let user1 = users[index1];
-                                            let user2 = users[index2];
-                                            let user3 = users[index3];
-                                            request({
-                                                hostname: config.hostname,
-                                                port: config.port,
-                                                path: `/room?sessionKey=${user0.sessionKey}&sessionValue=${user0.sessionValue}&authDeviceId=${user0.authDeviceId}`,
-                                                method: 'POST',
-                                                headers: {
-                                                    'Content-Type': 'application/json',
-                                                }
-                                            }, { users: [user0.uid, user1.uid, user2.uid, user3.uid], personal: true })
-                                                .then(res => {
-                                                    assert.equal(400, res.statusCode);
-                                                })
-                                                .then(() => done())
-                                                .catch(err => done(err));
-                                        });
-                                    }
-                                }
-
-                                it(`POST /room with users: [${index0}, ${index1}, ${index2}] and personal=true should return 400`, done => {
-                                    let user0 = users[index0];
-                                    let user1 = users[index1];
-                                    let user2 = users[index2];
-                                    request({
-                                        hostname: config.hostname,
-                                        port: config.port,
-                                        path: `/room?sessionKey=${user0.sessionKey}&sessionValue=${user0.sessionValue}&authDeviceId=${user0.authDeviceId}`,
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/json',
-                                        }
-                                    }, { users: [user0.uid, user1.uid, user2.uid], personal: true })
-                                        .then(res => {
-                                            assert.equal(400, res.statusCode);
-                                        })
-                                        .then(() => done())
-                                        .catch(err => done(err));
-                                });
-                            }
+                        for (let index3 of includeUserIndices) if (index3 != index2 && index3 != index1 && index3 != index0) {
+                            it(`POST /room with users: [${index0}, ${index1}, ${index2}, ${index3}] and personal=true should return 400`, done => test(done,
+                                index0,
+                                { users: [users[index0], users[index1], users[index2], users[index3]], personal: true },
+                                res => {
+                                    assert.equal(400, res.statusCode);
+                                })
+                            );
                         }
                     }
                 }
             }
         });
 
-    //    describe('PUT /user/:_id', () => {
-    //        let basePath = '/user';
+        describe('GET /room - retrive rooms current user is in', () => {
+            let test = (done, userIndex, personal, resCb, dataCb) => {
+                request({
+                    hostname: config.hostname,
+                    port: config.port,
+                    path: `/room?sessionKey=${users[userIndex].sessionKey}&sessionValue=${users[userIndex].sessionValue}&authDeviceId=${users[userIndex].authDeviceId}${personal ? '&personal' : ''}`,
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                    .then(res => {
+                        resCb(res);
+                        if (dataCb) {
+                            return fetchJSONData(res);
+                        }
+                    })
+                    .then(rooms => {
+                        if (dataCb) {
+                            dataCb(rooms)
+                        }
+                    })
+                    .then(() => done())
+                    .catch(err => done(err));
+            };
 
-    //        for (let exampleUser of exampleUsers) {
-    //            let queryParams = `?${sessionAuth.key}=${sessionAuth.value}&uid=${exampleUser.uid}`;
-    //            it('PUT example user should update it', done => {
-    //                let postData = Object.assign({}, exampleUser);
-    //                postData.name = postData.name.replace(/([0-9]+)$/, (str, p1) => { return String(Number(p1) + 1) });
-    //                postData.avatar = postData.avatar.replace(/https/, 'http');
+            let baseCheckRoom = room => {
+                assert.ok(room);
+                assert.ok(room._id);
+                assert.ok(room.messages);
+                assert.ok(room.users);
+            };
 
-    //                let req = http.request({
-    //                    hostname: 'localhost',
-    //                    port: config.port,
-    //                    path: basePath + `/${exampleUser._id}` + queryParams,
-    //                    method: 'PUT',
-    //                    headers: {
-    //                        'Content-Type': 'application/json',
-    //                        'Content-Length': Buffer.byteLength(JSON.stringify(postData))
-    //                    }
-    //                }, res => {
-    //                    assert.equal(200, res.statusCode);
+            let findUserAndCheckEquality = (user, room) => {
+                let user0 = room.users.find(u => u.uid == user.uid);
+                assert.ok(user0);
+                assert.equal(user0.uid, user.uid);
+                assert.equal(user0.name, user.name);
+                assert.equal(user0.avatar, user.avatar);
+            };
 
-    //                    let chunks = [];
+            for (let index of includeUserIndices) {
+                it(`GET /room with user ${index} should return array of rooms that he is in`, done => test(done,
+                    index,
+                    false,
+                    res => {
+                        assert.equal(200, res.statusCode);
+                    },
+                    newRooms => {
+                        assert.ok(newRooms);
+                        let createdRoomsIds = [];
+                        for (let roomId in rooms) if (rooms.hasOwnProperty(roomId)) {
+                            if (rooms[roomId].users.find(u => u.uid == users[index].uid))
+                                createdRoomsIds.push(roomId);
+                        }
 
-    //                    res.on('data', chunk => chunks.push(chunk));
+                        assert.equal(newRooms.length, createdRoomsIds.length);
+                        for (let room of newRooms) {
+                            baseCheckRoom(room);
 
-    //                    res.on('end', () => {
-    //                        let data = JSON.parse(Buffer.concat(chunks).toString());
+                            let createdRoom = rooms[room._id];
+                            assert.ok(createdRoom);
+                            assert.equal(room._id, createdRoom._id);
+                            assert.equal(room.users.length, createdRoom.users.length);
+                            for (let user of createdRoom.users) {
+                                findUserAndCheckEquality(user, room);
+                            }
+                        }
+                    })
+                );
+            }
 
-    //                        assert.ok(data._id);
-    //                        assert.equal(data.uid, postData.uid);
-    //                        assert.equal(data.name, postData.name);
-    //                        assert.equal(data.avatar, postData.avatar);
+            for (let index of includeUserIndices) {
+                it(`GET /room with user ${index} and personal should return array of personal rooms that he is in`, done => test(done,
+                    index,
+                    true,
+                    res => {
+                        assert.equal(200, res.statusCode);
+                    },
+                    newRooms => {
+                        assert.ok(newRooms);
+                        let createdRoomsIds = [];
+                        for (let roomId in rooms) if (rooms.hasOwnProperty(roomId)) {
+                            if (rooms[roomId].personal && rooms[roomId].users.find(u => u.uid == users[index].uid))
+                                createdRoomsIds.push(roomId);
+                        }
 
+                        assert.equal(newRooms.length, createdRoomsIds.length);
+                        for (let room of newRooms) {
+                            baseCheckRoom(room);
 
-    //                        Object.assign(exampleUser, data);
-
-    //                        done();
-    //                    });
-
-    //                });
-
-    //                req.on('error', err => done(err));
-
-    //                req.write(JSON.stringify(postData));
-    //                req.end();
-    //            });
-    //        }
-
-    //        let queryParams = `?${sessionAuth.key}=${sessionAuth.value}&uid=${exampleUsers[0].uid}`;
-    //        it('PUT to another user should return 401', done => {
-    //            let postData = Object.assign({}, exampleUsers[1]);
-
-    //            let req = http.request({
-    //                hostname: 'localhost',
-    //                port: config.port,
-    //                path: basePath + `/${exampleUsers[1]._id}` + queryParams,
-    //                method: 'PUT',
-    //                headers: {
-    //                    'Content-Type': 'application/json',
-    //                    'Content-Length': Buffer.byteLength(JSON.stringify(postData))
-    //                }
-    //            }, res => {
-    //                assert.equal(401, res.statusCode);
-
-    //                done()
-    //            });
-
-    //            req.on('error', err => done(err));
-
-    //            req.write(JSON.stringify(postData));
-    //            req.end();
-    //        });
-
-    //        it('PUT new uid should return 400', done => {
-    //            let postData = Object.assign({}, exampleUsers[0]);
-    //            postData.uid = exampleUsers[1].uid;
-
-    //            let req = http.request({
-    //                hostname: 'localhost',
-    //                port: config.port,
-    //                path: basePath + `/${exampleUsers[0]._id}` + queryParams,
-    //                method: 'PUT',
-    //                headers: {
-    //                    'Content-Type': 'application/json',
-    //                    'Content-Length': Buffer.byteLength(JSON.stringify(postData))
-    //                }
-    //            }, res => {
-    //                assert.equal(400, res.statusCode);
-
-    //                done()
-    //            });
-
-    //            req.on('error', err => done(err));
-
-    //            req.write(JSON.stringify(postData));
-    //            req.end();
-    //        });
-
-    //        it('PUT _id different from user\'s _id should return 400', done => {
-    //            let postData = Object.assign({}, exampleUsers[0]);
-    //            postData._id = exampleUsers[1]._id;
-
-    //            let req = http.request({
-    //                hostname: 'localhost',
-    //                port: config.port,
-    //                path: basePath + `/${exampleUsers[0]._id}` + queryParams,
-    //                method: 'PUT',
-    //                headers: {
-    //                    'Content-Type': 'application/json',
-    //                    'Content-Length': Buffer.byteLength(JSON.stringify(postData))
-    //                }
-    //            }, res => {
-    //                assert.equal(400, res.statusCode);
-
-    //                done()
-    //            });
-
-    //            req.on('error', err => done(err));
-
-    //            req.write(JSON.stringify(postData));
-    //            req.end();
-    //        });
-    //    });
-
-    //    describe('GET /room', () => {
-    //        let basePath = '/room';
-    //        let queryParams = `?${sessionAuth.key}=${sessionAuth.value}&uid=${exampleUsers[0].uid}`;
-
-    //        it('GET should return 200', done => {
-    //            let req = http.request({
-    //                hostname: 'localhost',
-    //                port: config.port,
-    //                path: basePath + queryParams,
-    //                method: 'GET',
-    //                headers: {
-    //                    'Content-Type': 'application/json',
-    //                }
-    //            }, res => {
-    //                assert.equal(200, res.statusCode);
-
-    //                done();
-    //                //let chunks = [];
-
-    //                //res.on('data', chunk => chunks.push(chunk));
-
-    //                //res.on('end', () => {
-    //                //    let data = JSON.parse(Buffer.concat(chunks).toString());
-
-    //                //    assert.ok(data.length);
-    //                //    assert.ok(data.length >= exampleUsers.length);
-
-    //                //    for (let exampleUser of exampleUsers) {
-    //                //        let user = data.find(elem => elem.uid == exampleUser.uid);
-
-    //                //        assert.ok(user);
-    //                //        assert.equal(user.uid, exampleUser.uid);
-    //                //        assert.equal(user.name, exampleUser.name);
-    //                //        assert.equal(user.avatar, exampleUser.avatar);
-    //                //    }
-    //                //    done();
-    //                //});
-
-    //            });
-
-    //            req.on('error', err => done(err));
-    //            req.end();
-    //        });
-    //    });
+                            let createdRoom = rooms[room._id];
+                            assert.ok(createdRoom);
+                            assert.equal(room._id, createdRoom._id);
+                            assert.equal(room.users.length, createdRoom.users.length);
+                            for (let user of createdRoom.users) {
+                                findUserAndCheckEquality(user, room);
+                            }
+                        }
+                    })
+                );
+            }
+        });
     });
 });
