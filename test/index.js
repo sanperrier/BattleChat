@@ -412,7 +412,7 @@ describe('Battle chat', () => {
             for (let index0 of includeUserIndices) {
                 for (let index1 of includeUserIndices) if (index0 == index1) {
                     for (let personal of [true, false]) {
-                        it(`POST /room with the same user as users: [${index1}, ${index0}] and personal=${personal} should return 400`, done => test(done,
+                        it(`POST /room with the users with duplicate: [${index1}, ${index0}] and personal=${personal} should return 400`, done => test(done,
                             index0,
                             { users: [users[index0].uid, users[index1].uid], personal: personal },
                             res => {
@@ -443,7 +443,7 @@ describe('Battle chat', () => {
                 for (let index1 of includeUserIndices) if (index0 != index1) {
                     for (let index2 of includeUserIndices) if (index2 != index1 && index2 != index0) {
                         for (let index3 of includeUserIndices) if (index3 != index2 && index3 != index1 && index3 != index0) {
-                            it(`POST /room with users: [${index1}, ${index2}, ${index3}] from user ${index0} should return 400`, done => test(done,
+                            it(`POST /room with users: [${index1}, ${index2}, ${index3}] without self ${index0} should return 400`, done => test(done,
                                 index0,
                                 { users: [users[index1].uid, users[index2].uid, users[index3].uid] },
                                 res => {
@@ -458,7 +458,7 @@ describe('Battle chat', () => {
             for (let index0 of includeUserIndices) {
                 for (let index1 of includeUserIndices) if (index0 != index1) {
                     for (let index2 of includeUserIndices) if (index2 != index1 && index2 != index0) {
-                        it(`POST /room with users: [${index0}, ${index1}, ${index2}] and personal=true should return 400`, done => test(done,
+                        it(`POST /room with 3 users: [${index0}, ${index1}, ${index2}] and personal=true should return 400`, done => test(done,
                             index0,
                             { users: [users[index0].uid, users[index1].uid, users[index2].uid], personal: true },
                             res => {
@@ -467,7 +467,7 @@ describe('Battle chat', () => {
                         );
 
                         for (let index3 of includeUserIndices) if (index3 != index2 && index3 != index1 && index3 != index0) {
-                            it(`POST /room with users: [${index0}, ${index1}, ${index2}, ${index3}] and personal=true should return 400`, done => test(done,
+                            it(`POST /room with 4 users: [${index0}, ${index1}, ${index2}, ${index3}] and personal=true should return 400`, done => test(done,
                                 index0,
                                 { users: [users[index0].uid, users[index1].uid, users[index2].uid, users[index3].uid], personal: true },
                                 res => {
