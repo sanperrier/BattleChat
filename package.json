@@ -7,7 +7,7 @@
     "start": "nodemon src/server.js --exec babel-node --ignore test/ | bunyan",
     "build": "babel src -d dist",
     "serve": "node dist/server.js",
-    "test": "mocha --compilers js:babel-register"
+    "test": "mocha --compilers js:babel-register --bail -t 10000"
   },
   "repository": {
     "type": "git",
@@ -36,7 +36,8 @@
     "babel-preset-stage-2": "^6.13.0",
     "babel-register": "^6.11.6",
     "mocha": "^3.0.2",
-    "nodemon": "^1.10.0"
+    "nodemon": "^1.10.0",
+    "util": "^0.10.3"
   },
   "babel": {
     "presets": [

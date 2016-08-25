@@ -16,39 +16,6 @@ export default class Server {
         this.Message = connection.model('Message', schemas.Message);
         this.User = connection.model('User', schemas.User);
 
-        function get_room(req, res, next) {
-            Room
-                .findOne({
-                    users: req.user._id,
-                    _id: req.params._id
-                })
-                .populate('messages')
-                .populate('users', '_id uid name avatar')
-                .exec((err, room) => {
-                    if (err) {
-                        return next(err);
-                    }
-
-                    if (!room)
-                        return next(new restify.ResourceNotFoundError("Could not find any such room"));
-
-                    if (room.users) {
-                        room.users.sort((a, b) => {
-                            return ((a.uid < b.uid) ? -1 : (a.uid > b.uid) ? 1 : 0);
-                        });
-                    }
-
-                    if (room.messages) {
-                        room.messages.sort((a, b) => {
-                            return ((a.date_added < b.date_added) ? -1 : (a.date_added > b.date_added) ? 1 : 0);
-                        });
-                    }
-
-                    res.send(room);
-                    return next();
-                });
-        }
-
         function post_room_user(req, res, next) {
             if (!req.body._id) {
                 return next(new restify.MissingParameterError("Missing required param or attribute"));
@@ -179,8 +146,8 @@ export default class Server {
             .use(restify.bodyParser({ mapParams: false }))
             .use(cookieParser.parse)
             .use(restify.throttle({
-                burst: 10,
-                rate: 1,
+                burst: 100,
+                rate: 10,
                 ip: false,
                 xff: true,
             }));
@@ -189,7 +156,7 @@ export default class Server {
 
         this.server.post('/room/', this.authorize.bind(this), this.post_room.bind(this));
         this.server.get('/room/', this.authorize.bind(this), this.populateUser.bind(this), this.get_rooms.bind(this));
-        //this.server.get('/room/:_id', this.authorize.bind(this), get_room);
+        this.server.get('/room/:_id', this.authorize.bind(this), this.populateUser.bind(this), this.get_room.bind(this));
 
         //this.server.post('/room/:room_id/user/', this.authorize.bind(this), post_room_user);
 
@@ -282,8 +249,7 @@ export default class Server {
     };
 
     post_room(req, res, next) {
-        let re = /^[a-zA-Z0-9]+$/;
-        let bodyUsers = req.body.users.map(u => String(u)).filter(u => re.test(u));
+        let bodyUsers = req.body.users.map(u => String(u)).filter(u => /^[a-zA-Z0-9]+$/.test(u));
         let personal = Boolean(req.body.personal);
 
         if (!bodyUsers || !bodyUsers.length || bodyUsers.length < 2) return next(new restify.MissingParameterError("Missing required body param users"));
@@ -339,6 +305,41 @@ export default class Server {
             })
             .catch(err => next(err));
     };
+
+    get_room(req, res, next) {
+        let queryRoomId = String(req.params._id);
+
+        if (!/^[a-zA-Z0-9]+$/.test(queryRoomId)) return next(new restify.BadRequestError(`Incorrect _id query param: ${queryRoomId}`));
+
+        this.Room
+            .findOne({
+                users: { $in: [req.user._id] },
+                _id: { $in: [queryRoomId] }
+            })
+            .populate('messages')
+            .populate('users', 'uid name avatar')
+            .exec()
+            .then(room => {
+                if (!room)
+                    return next(new restify.ResourceNotFoundError(`Could not find any such room: ${queryRoomId}`));
+
+                if (room.users) {
+                    room.users.sort((a, b) => {
+                        return ((a.uid < b.uid) ? -1 : (a.uid > b.uid) ? 1 : 0);
+                    });
+                }
+
+                if (room.messages) {
+                    room.messages.sort((a, b) => {
+                        return ((a.date_added < b.date_added) ? -1 : (a.date_added > b.date_added) ? 1 : 0);
+                    });
+                }
+
+                res.send(room);
+                return next();
+            })
+            .catch(err => next(err));
+    }
 
     listen(port, cb) {
         return this.server.listen(port, cb);

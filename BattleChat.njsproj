@@ -31,6 +31,7 @@
     <Folder Include="src\auth\" />
     <Folder Include="src\rest\" />
     <Folder Include="test\" />
+    <Folder Include="test\helpers\" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="src\rest\server.js" />
@@ -40,8 +41,9 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="src\auth\config.js" />
-    <Compile Include="test\config.js" />
-    <Compile Include="test\index.js" />
+    <Compile Include="test\helpers\common.js" />
+    <Compile Include="test\helpers\config.js" />
+    <Compile Include="test\auth.js" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.Common.targets" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <!--Do not delete the following Import Project.  While this appears to do nothing it is a marker for setting TypeScript properties before our import that depends on them.-->
