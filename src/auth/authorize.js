@@ -38,10 +38,10 @@ export default function authorize(params) {
     })
         .then(res => fetchJSONData(res))
         .then(data => {
-            if (data.client_auth && data.user_id && (data.u_name || data.u_surname || data.u_login || data.u_guest_login)) {
+            if (data.client_auth && data.user_id && (data.u_name || data.u_surname || data.u_login || data.is_guest)) {
                 return {
                     uid: data.user_id,
-                    name: data.u_name ? (data.u_surname ? `${data.u_name} ${data.u_surname}` : data.u_name) : (data.u_login ? data.u_login : data.u_guest_login),
+                    name: data.u_name ? (data.u_surname ? `${data.u_name} ${data.u_surname}` : data.u_name) : (data.u_login ? data.u_login : `Guest ${data.user_id}`),
                     avatar: data.u_ava || ''
                 };
             } else {
