@@ -156,11 +156,19 @@ export default class Server {
                         if (room) return room;
                         else {
                             let room = new this.Room();
-                            for (let user of users)
+                            for (let user of users) {
                                 room.users.push(user);
+                            }
                             room.personal = personal;
 
-                            return room.save();
+                            return room.save().then(room => {
+                                let promises = [];
+                                for (let user of users) {
+                                    user.chats.push(room);
+                                    promises.push(user.save());
+                                }
+                                return Promise.all(promises).then(() => room);
+                            });
                         }
                     })
                     .then(room => room.populate('users', 'uid name avatar').execPopulate())
