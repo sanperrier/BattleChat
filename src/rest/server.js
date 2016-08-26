@@ -16,115 +16,6 @@ export default class Server {
         this.Message = connection.model('Message', schemas.Message);
         this.User = connection.model('User', schemas.User);
 
-        function post_room_user(req, res, next) {
-            if (!req.body._id) {
-                return next(new restify.MissingParameterError("Missing required param or attribute"));
-            }
-
-            Room
-                .findOne({
-                    users: req.user,
-                    _id: req.params.room_id
-                })
-                .exec((err, room) => {
-                    if (err) {
-                        return next(err);
-                    }
-
-                    if (!room)
-                        return next(new restify.ResourceNotFoundError("Could not find any such room"));
-
-                    this.User
-                        .findOne({ _id: req.body._id }, '_id uid name avatar chats')
-                        .exec((err, user) => {
-                            if (err) {
-                                return next(err);
-                            }
-
-                            if (!user)
-                                return next(new restify.ResourceNotFoundError("Could not find any such user"));
-
-                            if (!room.users.some((userId) => { return userId.equals(user._id); })) {
-                                room.users.push(user);
-                                room.save((err) => {
-                                    if (err)
-                                        return next(err);
-
-                                    user.chats.push(room);
-                                    user.save((err) => {
-                                        if (err)
-                                            return next(err);
-
-                                        res.send(user);
-                                        return next();
-                                    });
-                                });
-                            } else {
-                                res.send(user);
-                                return next();
-                            }
-                        });
-                });
-        }
-
-
-        function post_message(req, res, next) {
-            if (!req.body.text) {
-                return next(new restify.MissingParameterError("Missing required message attribute in request body"));
-            }
-
-            //if (req.body.room != req.params.room_id) {
-            //    return next(new restify.InvalidArgumentError("Room id param is incompatible with room id argument in request body"));
-            //}
-
-            Room
-                .findOne({
-                    users: req.user._id,
-                    _id: req.params.room_id
-                })
-                .exec((err, room) => {
-                    if (err) {
-                        return next(err);
-                    }
-
-                    if (!room) {
-                        return next(new restify.ResourceNotFoundError("Could not find room with id=" + req.body.roomId));
-                    }
-
-                    let msg = new Message({
-                        user: req.user,
-                        room: room,
-                        text: req.body.text,
-                        date_added: new Date()
-                    });
-
-                    msg.save((err) => {
-                        if (err)
-                            return next(err);
-
-                        room.messages.push(msg);
-
-                        room
-                            .populate('messages')
-                            .populate('users', 'uid name avatar', (err) => {
-                                if (err)
-                                    return next(err);
-
-                                room.save((err) => {
-                                    if (err)
-                                        return next(err);
-
-                                    msg.room = room;
-
-                                    res.send(msg);
-                                    return next();
-                                });
-                            })
-
-                    });
-                });
-        }
-
         this.server = restify.createServer({
             name: 'Battle chat RESTify server',
         });
@@ -158,9 +49,8 @@ export default class Server {
         this.server.get('/room/', this.authorize.bind(this), this.populateUser.bind(this), this.get_rooms.bind(this));
         this.server.get('/room/:_id', this.authorize.bind(this), this.populateUser.bind(this), this.get_room.bind(this));
 
+        this.server.post('/room/:room_id/message', this.authorize.bind(this), this.populateUser.bind(this), this.post_room_message.bind(this));
         //this.server.post('/room/:room_id/user/', this.authorize.bind(this), post_room_user);
-
-        //this.server.post('/room/:room_id/message/', this.authorize.bind(this), post_message);
 
         return this;
     };
@@ -204,9 +94,7 @@ export default class Server {
     };
 
     populateUser(req, res, next) {
-        if (!req.user || !req.user.uid || !req.user.name) {
-            return next(new restify.UnauthorizedError("req.user is incorrect"));
-        }
+        if (!req.user || !req.user.uid || !req.user.name) return next(new restify.UnauthorizedError("req.user is incorrect"));
 
         this.User
             .findOne({ uid: req.user.uid }).exec()
@@ -223,10 +111,8 @@ export default class Server {
                     return user;
                 }
             })
-            .then(user => {
-                req.user = user;
-                return next();
-            })
+            .then(user => req.user = user)
+            .then(() => next())
             .catch(err => next(err));
     };
 
@@ -234,17 +120,14 @@ export default class Server {
         req.user
             .populate('chats').execPopulate()
             .then(user => {
-                this.Room
+                return this.Room
                     .populate(user.chats, {
                         path: 'users',
                         select: 'uid name avatar'
                     })
-                    .then(() => {
-                        res.send(user);
-                        return next();
-                    })
-                    .catch(err => next(err));
+                    .then(() => res.send(user));
             })
+            .then(() => next())
             .catch(err => next(err));
     };
 
@@ -299,10 +182,8 @@ export default class Server {
         this.Room
             .find(condition)
             .populate('users', 'uid name avatar')
-            .then(rooms => {
-                res.send(rooms);
-                return next();
-            })
+            .then(rooms => res.send(rooms))
+            .then(() => next())
             .catch(err => next(err));
     };
 
@@ -318,26 +199,54 @@ export default class Server {
             })
             .populate('messages')
             .populate('users', 'uid name avatar')
-            .exec()
             .then(room => {
-                if (!room)
-                    return next(new restify.ResourceNotFoundError(`Could not find any such room: ${queryRoomId}`));
+                if (!room) throw new restify.ResourceNotFoundError(`Could not find any such room: ${queryRoomId}`);
 
                 if (room.users) {
-                    room.users.sort((a, b) => {
-                        return ((a.uid < b.uid) ? -1 : (a.uid > b.uid) ? 1 : 0);
-                    });
+                    room.users.sort((a, b) => ((a.uid < b.uid) ? -1 : (a.uid > b.uid) ? 1 : 0));
                 }
 
                 if (room.messages) {
-                    room.messages.sort((a, b) => {
-                        return ((a.date_added < b.date_added) ? -1 : (a.date_added > b.date_added) ? 1 : 0);
-                    });
+                    room.messages.sort((a, b) => ((a.date_added < b.date_added) ? -1 : (a.date_added > b.date_added) ? 1 : 0));
                 }
 
                 res.send(room);
-                return next();
             })
+            .then(() => next())
+            .catch(err => next(err));
+    }
+
+    post_room_message(req, res, next) {
+        let queryRoomId = String(req.params.room_id);
+
+        if (!/^[a-zA-Z0-9]+$/.test(queryRoomId)) return next(new restify.BadRequestError(`Incorrect _id query param: ${queryRoomId}`));
+
+        if (!req.body.text) return next(new restify.MissingParameterError("Missing required message attribute in request body"));
+
+        this.Room
+            .findOne({
+                users: { $in: [req.user._id] },
+                _id: { $in: [queryRoomId] }
+            }).exec()
+            .then(room => {
+                if (!room) throw new restify.ResourceNotFoundError("Could not find room with id=" + req.body.roomId);
+
+                let msg = new this.Message({
+                    user: req.user._id,
+                    room: room,
+                    text: req.body.text,
+                    date_added: new Date()
+                });
+
+                return msg.save()
+                    .then(msg => {
+                        room.messages.push(msg);
+                        return room.save();
+                    })
+                    .then(room => room.populate('messages').populate('users', 'uid name avatar').execPopulate())
+                    .then(room => res.send(msg));
+            })
+            .then(() => next())
             .catch(err => next(err));
     }
 
