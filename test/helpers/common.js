@@ -29,36 +29,41 @@ export function fetchJSONData(res) {
     });
 }
 
+function dropCollection(connection, name) {
+    return new Promise((resolve, reject) => {
+        connection.collection(name).drop((err, result) => {
+            if (err && err.message != 'ns not found') reject(err);
+            else resolve();
+        });
+    });
+}
+
 export function clearDbAndGetTestUsers(num) {
     return new Promise((resolve, reject) => {
         if (mongoose.connection.readyState == 0) {
             mongoose.connect(config.db, (err) => {
                 if (err) reject(err);
-                else {
-                    mongoose.connection.db.dropDatabase();
-                    resolve();
-                }
+                else resolve(mongoose.connection);
             });
         } else if (mongoose.connection.readyState == 1) {
-            mongoose.connection.db.dropDatabase();
-            resolve();
+            resolve(mongoose.connection);
         } else if (mongoose.connection.readyState == 2) {
             mongoose.connection.once('connected', () => {
-                mongoose.connection.db.dropDatabase();
-                resolve();
+                resolve(mongoose.connection);
             });
         } else if (mongoose.connection.readyState == 3) {
             mongoose.connection.once('disconnected', () => {
                 mongoose.connect(config.db, (err) => {
                     if (err) reject(err);
                     else {
-                        mongoose.connection.db.dropDatabase();
-                        resolve();
+                        resolve(mongoose.connection);
                     }
                 });
             });
         }
-    }).then(() => {
+    })
+    .then(connection => Promise.all([dropCollection(connection, 'rooms'), dropCollection(connection, 'users'), dropCollection(connection, 'messages')]))
+    .then(() => {
         let promises = [];
         for (var index = 0; index < num; ++index) {
             let login = `battle-chat-tester${index}`;

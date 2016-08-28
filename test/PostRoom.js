@@ -220,4 +220,6 @@ describe('REST Server: POST /room - create new room and retrive it', () => {
                 user0, { users: [user0.uid, user1.uid, user2.uid, user3.uid], personal: true },
                 res => assert.equal(400, res.statusCode))]);
     });
+
+    //throw new Error("ADD AFTER SECTION WITH TESTING GET /user .chats")
 });
