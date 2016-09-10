@@ -108,7 +108,13 @@ export default class Server {
 
                     return user.save();
                 } else {
-                    return user;
+                    if (user.name != req.user.name || user.avatar != req.user.avatar) {
+                        user.name = req.user.name;
+                        user.avatar = req.user.avatar;
+                        return user.save();
+                    } else {
+                        return user;
+                    }
                 }
             })
             .then(user => req.user = user)
