@@ -17,11 +17,15 @@ function fetchJSONData(res) {
         let chunks = [];
         res.on('data', chunk => chunks.push(chunk));
         res.on('end', () => {
-            let data = stripBom(Buffer.concat(chunks)).toString('utf-8');
-            if (/^\(.*\)$/.test(data)) {
-                data = data.slice(1, -1);
+            try {
+                let data = stripBom(stripBom(Buffer.concat(chunks))).toString('utf-8');
+                if (/^\(.*\)$/.test(data)) {
+                    data = data.slice(1, -1);
+                }
+                resolve(JSON.parse(data));
+            } catch (e) {
+                reject(e);
             }
-            resolve(JSON.parse(data));
         });
     });
 }

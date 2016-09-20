@@ -24,8 +24,9 @@ export default class Server {
             log: bunyan.createLogger({
                 name: 'Battle chat RESTify server',
                 streams: [
-                    { level: "debug", stream: process.stdout },
-                    { level: "trace", path: 'server.log' }]
+                    { level: "error", stream: process.stderr },
+                    { level: process.env.NODE_ENV == "debug" ? "debug" : "info", stream: process.stdout },
+                    { level: process.env.NODE_ENV == "debug" ? "trace" : "debug", type: 'rotating-file', period: '1d', count: 30, path: 'server.log' }]
             }),
             body: true,
         }));
@@ -88,7 +89,6 @@ export default class Server {
                 return next();
             })
             .catch(err => {
-                console.log(req, err);
                 return next(new restify.UnauthorizedError(String(err)));
             })
     };
