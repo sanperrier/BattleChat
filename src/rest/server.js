@@ -160,6 +160,7 @@ export default class Server {
                                 room.users.push(user);
                             }
                             room.personal = personal;
+                            room.updated_at = new Date();
 
                             return room.save().then(room => {
                                 let promises = [];
@@ -249,6 +250,7 @@ export default class Server {
                 return msg.save()
                     .then(msg => {
                         room.messages.push(msg);
+                        room.updated_at = new Date();
                         return room.save();
                     })
                     .then(room => room.populate('messages').populate('users', 'uid name avatar').execPopulate())
