@@ -64,7 +64,7 @@ export function clearDbAndGetTestUsers(num) {
             let login = `battle-chat-tester${index}`;
             let email = `battle-chat-tester${index}@example.org`;
             let passwd = `battle-chat-tester${index}`;
-            let authDeviceId = config.deviceId;
+            let authDeviceId = `${config.deviceId}${index}`;
 
             promises.push(
                 request({
