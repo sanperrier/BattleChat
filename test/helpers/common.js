@@ -65,6 +65,7 @@ export function clearDbAndGetTestUsers(num) {
             let email = `battle-chat-tester${index}@example.org`;
             let passwd = `battle-chat-tester${index}`;
             let authDeviceId = `${config.deviceId}${index}`;
+            let _index = index;
 
             promises.push(
                 request({
@@ -106,7 +107,7 @@ export function clearDbAndGetTestUsers(num) {
                                 name: data.answer.u_name ? (data.answer.u_surname ? `${data.answer.u_name} ${data.answer.u_surname}` : data.answer.u_name) : (data.answer.u_login ? data.answer.u_login : data.answer.u_guest_login),
                                 avatar: data.answer.u_ava || ''
                             };
-                            user.index = index;
+                            user.index = _index;
                             return user;
                         }
                         else throw new Error(JSON.stringify(data));

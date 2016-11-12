@@ -42,7 +42,9 @@ export default function authorize(params) {
                 return {
                     uid: data.user_id,
                     name: data.u_name ? (data.u_surname ? `${data.u_name} ${data.u_surname}` : data.u_name) : (data.u_login ? data.u_login : `Guest ${data.user_id}`),
-                    avatar: data.u_ava || ''
+                    avatar: data.u_ava || '',
+                    iosDeviceId: params.iosDeviceId,
+                    androidDeviceId: params.androidDeviceId
                 };
             } else {
                 throw new Error(JSON.stringify(data));

@@ -8,8 +8,17 @@ User.add({
     uid: String,
     name: String,
     avatar: String,
-    chats: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Room' }]
+    chats: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Room' }],
+    iosDeviceId: String,
+    androidDeviceId: String,
 });
+
+User.methods.toJSON = function () {
+    var obj = this.toObject()
+    delete obj.iosDeviceId;
+    delete obj.androidDeviceId;
+    return obj;
+};
 
 Room.add({
     personal: Boolean,

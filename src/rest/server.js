@@ -9,6 +9,8 @@ import bunyan from 'bunyan';
 import * as schemas from './../db/schemas';
 
 import auth from './../auth/authorize';
+import { sendToIOsNotificationAboutNewMessage,
+    sendToAndroidNotificationAboutNewMessage } from './../push/push';
 
 export default class Server {
     constructor(connection) {
@@ -56,9 +58,11 @@ export default class Server {
     };
 
     authorize(req, res, next) {
-        let sessionKey = String(req.cookies.sessionKey || req.query.sessionKey);
-        let sessionValue = String(req.cookies.sessionValue || req.query.sessionValue);
-        let authDeviceId = String(req.cookies.authDeviceId || req.query.authDeviceId);
+        let sessionKey = String(req.cookies.sessionKey || req.query.sessionKey || "");
+        let sessionValue = String(req.cookies.sessionValue || req.query.sessionValue || "");
+        let authDeviceId = String(req.cookies.authDeviceId || req.query.authDeviceId || "");
+        let androidDeviceId = String(req.cookies.androidDeviceId || req.query.androidDeviceId || "");
+        let iosDeviceId = String(req.cookies.iosDeviceId || req.query.iosDeviceId || "");
 
         if (!sessionKey) {
             return next(new restify.UnauthorizedError("Missing required query param sessionKey"));
@@ -77,14 +81,16 @@ export default class Server {
             return next(new restify.UnauthorizedError());
         }
 
-        auth({ sessionKey, sessionValue, authDeviceId })
+        auth({ sessionKey, sessionValue, authDeviceId, iosDeviceId, androidDeviceId })
             .then(data => {
                 if (!req.user) req.user = {};
                 req.user.uid = data.uid;
                 req.user.name = data.name;
                 req.user.avatar = data.avatar;
+                req.user.iosDeviceId = data.iosDeviceId;
+                req.user.androidDeviceId = data.androidDeviceId;
 
-                console.log(`User ${data.name} [uid=${data.uid}] authorized with ${sessionKey}=${sessionValue} and authDeviceId=${authDeviceId}`);
+                console.log(`User ${data.name} [uid=${data.uid}] authorized with ${sessionKey}=${sessionValue}, authDeviceId=${authDeviceId}, iosDeviceId=${iosDeviceId} and androidDeviceId=${androidDeviceId}`);
                 return next();
             })
             .catch(err => {
@@ -103,12 +109,31 @@ export default class Server {
                     let user = new this.User({
                         uid: req.user.uid,
                         name: req.user.name,
-                        avatar: req.user.avatar
+                        avatar: req.user.avatar,
+                        iosDeviceId: req.user.iosDeviceId || "",
+                        androidDeviceId: req.user.androidDeviceId || "",
                     });
 
                     return user.save();
                 } else {
-                    return user;
+                    if ((req.user.name && user.name != req.user.name) ||
+                        (req.user.avatar && user.avatar != req.user.avatar) ||
+                        (req.user.iosDeviceId && user.iosDeviceId != req.user.iosDeviceId) ||
+                        (req.user.androidDeviceId && user.androidDeviceId != req.user.androidDeviceId)
+                    ) {
+                        if (req.user.name && user.name != req.user.name)
+                            user.name = req.user.name;
+                        if (req.user.avatar && user.avatar != req.user.avatar)
+                            user.avatar = req.user.avatar;
+                        if (req.user.iosDeviceId && user.iosDeviceId != req.user.iosDeviceId)
+                            user.iosDeviceId = req.user.iosDeviceId;
+                        if (req.user.androidDeviceId && user.androidDeviceId != req.user.androidDeviceId) 
+                            user.androidDeviceId = req.user.androidDeviceId;
+
+                        return user.save();
+                    } else {
+                        return user;
+                    }
                 }
             })
             .then(user => req.user = user)
@@ -197,7 +222,7 @@ export default class Server {
     };
 
     get_room(req, res, next) {
-        let queryRoomId = String(req.params._id);
+        let queryRoomId = String(req.params._id || "");
 
         if (!/^[a-zA-Z0-9]+$/.test(queryRoomId)) return next(new restify.BadRequestError(`Incorrect _id query param: ${queryRoomId}`));
 
@@ -226,7 +251,7 @@ export default class Server {
     }
 
     post_room_message(req, res, next) {
-        let queryRoomId = String(req.params.room_id);
+        let queryRoomId = String(req.params.room_id || "");
 
         if (!/^[a-zA-Z0-9]+$/.test(queryRoomId)) return next(new restify.BadRequestError(`Incorrect _id query param: ${queryRoomId}`));
 
@@ -253,7 +278,23 @@ export default class Server {
                         room.updated_at = new Date();
                         return room.save();
                     })
-                    .then(room => room.populate('messages').populate('users', 'uid name avatar').execPopulate())
+                    .then(room => room.populate('messages').populate('users').execPopulate())
+                    .then(room => {
+                        try {
+                            for (let user of room.users) if (user.id != req.user._id) {
+                                if (user.iosDeviceId) {
+                                    sendToIOsNotificationAboutNewMessage(user.iosDeviceId, user.name, msg.text);
+                                }
+
+                                if (user.androidDeviceId) {
+                                    sendToAndroidNotificationAboutNewMessage(user.androidDeviceId, user.name, msg.text);
+                                }
+                            }
+                        } catch (err) {
+                            console.log(err);
+                        }
+                        return room;
+                    })
                     .then(room => res.send(msg));
             })
             .then(() => next())

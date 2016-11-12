@@ -20,8 +20,10 @@
   },
   "homepage": "https://github.com/sanperrier/BattleChat#readme",
   "dependencies": {
+    "apn": "^2.1.2",
     "bunyan": "^1.8.1",
     "mongoose": "^4.5.8",
+    "node-gcm": "^0.14.4",
     "request": "^2.74.0",
     "restify": "^4.1.1",
     "restify-cookies": "^0.2.2",
