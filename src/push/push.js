@@ -20,21 +20,24 @@ function getGcmSender() {
     return gcmSender;
 }
 
-function sendToIOs(token, title, body) {
+function sendToIOs(token, title, body, additionalData) {
     var notification = new apn.Notification();
+    if (additionalData)
+        notification.payload = additionalData;
     notification.body = body;
     notification.title = title;
     notification.topic = config.topic;
     return getApnProvider().send(notification, token);
 };
 
-function sendToAndroid(token, title, body) {
+function sendToAndroid(token, title, body, additionalData) {
     let message = new gcm.Message({
         priority: 'high',
         notification: {
             title,
             body
-        }
+        },
+        data: additionalData
     });
 
     return new Promise((resolve, reject) =>
@@ -45,14 +48,18 @@ function sendToAndroid(token, title, body) {
     );
 };
 
-export function sendToIOsNotificationAboutNewMessage(token, author, text) {
+export function sendToIOsNotificationAboutNewMessage(token, author, text, roomId) {
     return sendToIOs(token,
         config.strings.newMessageTitle({ author }),
-        config.strings.newMessageBody({ text }));
+        config.strings.newMessageBody({ text }),
+        { rid: roomId }
+    );
 }
 
-export function sendToAndroidNotificationAboutNewMessage(token, author, text) {
+export function sendToAndroidNotificationAboutNewMessage(token, author, text, roomId) {
     return sendToAndroid(token,
         config.strings.newMessageTitle({ author }),
-        config.strings.newMessageBody({ text }));
+        config.strings.newMessageBody({ text }),
+        { rid: roomId }
+    );
 }

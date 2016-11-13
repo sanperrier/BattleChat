@@ -29,12 +29,21 @@
     <Folder Include="src" />
     <Folder Include="src\db\" />
     <Folder Include="src\auth\" />
+    <Folder Include="src\push\" />
     <Folder Include="src\rest\" />
     <Folder Include="test\" />
     <Folder Include="test\helpers\" />
     <Folder Include="typings\" />
     <Folder Include="typings\globals\" />
+    <Folder Include="typings\globals\apn\" />
+    <Folder Include="typings\globals\bunyan\" />
+    <Folder Include="typings\globals\mocha\" />
+    <Folder Include="typings\globals\mongoose\" />
+    <Folder Include="typings\globals\node-gcm\" />
     <Folder Include="typings\globals\node\" />
+    <Folder Include="typings\globals\request\" />
+    <Folder Include="typings\globals\restify\" />
+    <Folder Include="typings\globals\socket.io\" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="src\rest\server.js" />
@@ -44,12 +53,22 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="src\auth\config.js" />
+    <Content Include="src\push\push.js" />
+    <Content Include="src\push\config.js" />
     <Compile Include="test\helpers\common.js" />
     <Compile Include="test\helpers\config.js" />
     <Compile Include="test\index.js" />
   </ItemGroup>
   <ItemGroup>
+    <TypeScriptCompile Include="typings\globals\apn\index.d.ts" />
+    <TypeScriptCompile Include="typings\globals\bunyan\index.d.ts" />
+    <TypeScriptCompile Include="typings\globals\mocha\index.d.ts" />
+    <TypeScriptCompile Include="typings\globals\mongoose\index.d.ts" />
+    <TypeScriptCompile Include="typings\globals\node-gcm\index.d.ts" />
     <TypeScriptCompile Include="typings\globals\node\index.d.ts" />
+    <TypeScriptCompile Include="typings\globals\request\index.d.ts" />
+    <TypeScriptCompile Include="typings\globals\restify\index.d.ts" />
+    <TypeScriptCompile Include="typings\globals\socket.io\index.d.ts" />
     <TypeScriptCompile Include="typings\index.d.ts" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.Common.targets" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />

@@ -283,11 +283,11 @@ export default class Server {
                         try {
                             for (let user of room.users) if (user.id != req.user._id) {
                                 if (user.iosDeviceId) {
-                                    sendToIOsNotificationAboutNewMessage(user.iosDeviceId, user.name, msg.text);
+                                    sendToIOsNotificationAboutNewMessage(user.iosDeviceId, req.user.name, msg.text, msg.room._id);
                                 }
 
                                 if (user.androidDeviceId) {
-                                    sendToAndroidNotificationAboutNewMessage(user.androidDeviceId, user.name, msg.text);
+                                    sendToAndroidNotificationAboutNewMessage(user.androidDeviceId, req.user.name, msg.text, msg.room._id);
                                 }
                             }
                         } catch (err) {
