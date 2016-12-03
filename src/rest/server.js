@@ -142,13 +142,22 @@ export default class Server {
     };
 
     get_user(req, res, next) {
+        let activeTimeoutSecs = Number(req.query.active),
+            onlyActive = activeTimeoutSecs > 0;
+
         req.user
-            .populate('chats').execPopulate()
+            .populate({
+                path: 'chats',
+                match: onlyActive ? {
+                    updated_at: { $gt: new Date(Date.now() - activeTimeoutSecs * 1000) }
+                } : {}
+            })
+            .execPopulate()
             .then(user => {
                 return this.Room
                     .populate(user.chats, {
                         path: 'users',
-                        select: 'uid name avatar'
+                        select: 'uid name avatar',
                     })
                     .then(() => res.send(user));
             })
