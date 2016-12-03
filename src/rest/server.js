@@ -231,6 +231,8 @@ export default class Server {
     };
 
     get_room(req, res, next) {
+        let limit = Number(req.query.limit);
+
         let queryRoomId = String(req.params._id || "");
 
         if (!/^[a-zA-Z0-9]+$/.test(queryRoomId)) return next(new restify.BadRequestError(`Incorrect _id query param: ${queryRoomId}`));
@@ -240,7 +242,13 @@ export default class Server {
                 users: { $in: [req.user._id] },
                 _id: { $in: [queryRoomId] }
             })
-            .populate('messages')
+            .populate({
+                path: 'messages',
+                options: limit == 0 ? {} : {
+                    limit: Math.abs(limit),
+                    sort: { '_id': limit > 0 ? 'asc' : 'desc' }
+                }
+            })
             .populate('users', 'uid name avatar')
             .then(room => {
                 if (!room) throw new restify.ResourceNotFoundError(`Could not find any such room: ${queryRoomId}`);
@@ -287,7 +295,7 @@ export default class Server {
                         room.updated_at = new Date();
                         return room.save();
                     })
-                    .then(room => room.populate('messages').populate('users').execPopulate())
+                    //.then(room => room.populate('messages').populate('users').execPopulate())
                     .then(room => {
                         try {
                             for (let user of room.users) if (user.id != req.user._id) {
