@@ -26,8 +26,8 @@ export default class Server {
             log: bunyan.createLogger({
                 name: 'Battle chat RESTify server',
                 streams: [
-                    { level: "debug", stream: process.stdout },
-                    { level: "trace", path: 'server.log' }]
+                    { level: "warn", stream: process.stdout },
+                    { level: "trace", path: 'server.log', type: "rotating-file", period: "1d", count: 1 }]
             }),
             body: true,
         }));
@@ -295,7 +295,10 @@ export default class Server {
                         room.updated_at = new Date();
                         return room.save();
                     })
-                    //.then(room => room.populate('messages').populate('users').execPopulate())
+                    .then(room => room.populate({
+                            path: 'users',
+                            select: 'id iosDeviceId androidDeviceId'
+                        }).execPopulate())
                     .then(room => {
                         try {
                             for (let user of room.users) if (user.id != req.user._id) {
