@@ -11,5 +11,6 @@ export default {
     strings: {
         newMessageTitle: params => `Message from ${params.author}`,
         newMessageBody: params => params.text,
-    }
+    },
+    badgeIsAlwaysOne: false
 };

@@ -27,18 +27,30 @@ function sendToIOs(token, title, body, additionalData) {
     notification.body = body;
     notification.title = title;
     notification.topic = config.topic;
+
+    if (config.badgeIsAlwaysOne) {
+        notification.badge = 1;
+    }
+
     return getApnProvider().send(notification, token);
 };
 
 function sendToAndroid(token, title, body, additionalData) {
-    let message = new gcm.Message({
+    const message = new gcm.Message({
         priority: 'high',
         notification: {
             title,
-            body
+            body,
+            badge: config.badgeIsAlwaysOne ? 1 : undefined,
+            msgcnt: config.badgeIsAlwaysOne ? 1 : undefined,
         },
         data: additionalData
     });
+
+    if (config.badgeIsAlwaysOne) {
+        message.addData('msgcnt', '1');
+        message.addData('badge', '1');
+    }
 
     return new Promise((resolve, reject) =>
         getGcmSender().send(message, { registrationTokens: [token] }, function (err, response) {
